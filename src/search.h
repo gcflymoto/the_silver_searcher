@@ -29,6 +29,7 @@
 #include "options.h"
 #include "print.h"
 #include "util.h"
+#include "decompress.h"
 #include "uthash.h"
 
 size_t bad_char_skip_lookup[UCHAR_MAX + 1];

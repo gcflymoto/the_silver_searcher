@@ -57,6 +57,7 @@ typedef struct {
     int literal_ends_wordchar;
     size_t max_matches_per_file;
     int max_search_depth;
+    int multiline;
     int one_dev;
     int only_matching;
     char path_sep;
@@ -88,6 +89,7 @@ typedef struct {
     int parallel;
     int use_thread_affinity;
     int vimgrep;
+    size_t width;
     int word_regexp;
     int workers;
 } cli_options;

@@ -26,4 +26,7 @@ test_big: ag
 test_big_compressed: ag
 	cram -v tests/big/big_file_compressed.t
 
+test_fail: ag
+	cram -v tests/fail/*.t
+
 .PHONY : all test clean

@@ -4,7 +4,7 @@ A code searching tool similar to `ack`, with a focus on speed.
 
 [![Build Status](https://travis-ci.org/ggreer/the_silver_searcher.svg?branch=master)](https://travis-ci.org/ggreer/the_silver_searcher)
 
-[![Floobits Status](https://floobits.com/ggreer/ag.png)](https://floobits.com/ggreer/ag/redirect)
+[![Floobits Status](https://floobits.com/ggreer/ag.svg)](https://floobits.com/ggreer/ag/redirect)
 
 [![#ag on Freenode](http://img.shields.io/Freenode/%23ag.png)](https://webchat.freenode.net/?channels=ag)
 
@@ -56,9 +56,12 @@ or
 * Ubuntu >= 13.10 (Saucy) or Debian >= 8 (Jessie)
 
         apt-get install silversearcher-ag
-* Fedora 19+
+* Fedora 21 and lower
 
         yum install the_silver_searcher
+* Fedora 22+
+
+        dnf install the_silver_searcher
 * RHEL7+
 
         rpm -Uvh http://download.fedoraproject.org/pub/epel/7/x86_64/e/epel-release-7-5.noarch.rpm
@@ -84,7 +87,9 @@ or
 
         pkg_add the_silver_searcher
 
+### Cygwin
 
+Run the relevant [`setup-*.exe`](https://cygwin.com/install.html), and select "the\_silver\_searcher" in the "Utils" category.
 
 ## Building from source
 
@@ -112,15 +117,17 @@ or
 
         ./build.sh
 
-  On Windows:
+  On Windows (inside an msys/MinGW shell):
 
-        mingw32-make -f Makefile.w32
+        make -f Makefile.w32
 3. Make install:
 
         sudo make install
 
 
 ### Building a release tarball
+
+GPG-signed releases are available [here](http://geoff.greer.fm/ag).
 
 Building release tarballs requires the same dependencies, except for automake and pkg-config. Once you've installed the dependencies, just run:
 
