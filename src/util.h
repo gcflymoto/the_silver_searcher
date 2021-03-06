@@ -50,16 +50,11 @@ typedef struct {
     long total_bytes;
     long total_files;
     long total_matches;
+    long total_file_matches;
     struct timeval time_start;
     struct timeval time_end;
 } ag_stats;
 
-typedef enum {
-    AG_NO_COMPRESSION,
-    AG_GZIP,
-    AG_COMPRESS,
-    AG_ZIP
-} ag_compression_type;
 
 ag_stats stats;
 
@@ -89,10 +84,8 @@ const char *boyer_moore_horspool_strncasestr(const char* haystack, const char* n
 strncmp_fp get_strstr(enum case_behavior casing, enum algorithm_type algorithm);
 
 size_t invert_matches(const char *buf, const size_t buf_len, match_t matches[], size_t matches_len);
+void realloc_matches(match_t **matches, size_t *matches_size, size_t matches_len);
 void compile_study(pcre **re, pcre_extra **re_extra, char *q, const int pcre_opts, const int study_opts);
-
-void *decompress(const ag_compression_type zip_type, const void *buf, const int buf_len, const char *dir_full_path, unsigned int *new_buf_len);
-ag_compression_type is_zipped(const void *buf, const int buf_len);
 
 int is_binary(const void *buf, const size_t buf_len);
 int is_regex(const char *query);
@@ -111,6 +104,8 @@ int is_named_pipe(const char *path, const struct dirent *d);
 void die(const char *fmt, ...);
 
 void ag_asprintf(char **ret, const char *fmt, ...);
+
+ssize_t buf_getline(const char **line, const char *buf, const size_t buf_len, const size_t buf_offset);
 
 #ifndef HAVE_FGETLN
 char *fgetln(FILE *fp, size_t *lenp);
