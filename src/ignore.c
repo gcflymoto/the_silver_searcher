@@ -429,9 +429,9 @@ int filename_filter(const char *path, const struct dirent *dir, void *baton) {
 #ifndef HAVE_DIRENT_DNAMLEN
         filename_len = strlen(filename);
 #endif
-            filename++;
-            filename_len--;
-        }
+        filename++;
+        filename_len--;
+    }
 
     const ignores *ig = scandir_baton->ig;
 

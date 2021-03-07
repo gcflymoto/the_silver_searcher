@@ -270,7 +270,7 @@ void parse_options(int argc, char **argv, char **base_paths[], char **paths[]) {
         { "heading", no_argument, &opts.print_path, PATH_PRINT_TOP },
         { "help", no_argument, NULL, 'h' },
         { "hidden", no_argument, &opts.search_hidden_files, 1 },
-        { "horspool", no_argument, (int*)(&opts.algorithm), ALGORITHM_BOYER_MOORE_HORSPOOL },
+        { "horspool", no_argument, (int *)(&opts.algorithm), ALGORITHM_BOYER_MOORE_HORSPOOL },
         { "ignore", required_argument, NULL, 0 },
         { "ignore-case", no_argument, NULL, 'i' },
         { "ignore-dir", required_argument, NULL, 0 },

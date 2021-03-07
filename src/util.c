@@ -201,9 +201,8 @@ void generate_hash(const char *find, const size_t f_len, uint8_t *h_table, const
 }
 
 /* Boyer-Moore strstr */
-static inline _GL_ATTRIBUTE_PURE _GL_ATTRIBUTE_HOT _GL_ATTRIBUTE_NOTHROW
-const char *boyer_moore_strnstr(const char *s, const char *find, const size_t s_len, const size_t f_len,
-                                const size_t alpha_skip_lookup[], const size_t *find_skip_lookup) {
+static inline _GL_ATTRIBUTE_PURE _GL_ATTRIBUTE_HOT _GL_ATTRIBUTE_NOTHROW const char *boyer_moore_strnstr(const char *s, const char *find, const size_t s_len, const size_t f_len,
+                                                                                                         const size_t alpha_skip_lookup[], const size_t *find_skip_lookup) {
     ssize_t i;
     size_t pos = f_len - 1;
 
@@ -221,9 +220,8 @@ const char *boyer_moore_strnstr(const char *s, const char *find, const size_t s_
 
 
 /* Copy-pasted from above. Yes I know this is bad. One day I might even fix it. */
-static inline _GL_ATTRIBUTE_PURE _GL_ATTRIBUTE_HOT _GL_ATTRIBUTE_NOTHROW
-const char *boyer_moore_strncasestr(const char *s, const char *find, const size_t s_len, const size_t f_len,
-                                    const size_t alpha_skip_lookup[], const size_t *find_skip_lookup) {
+static inline _GL_ATTRIBUTE_PURE _GL_ATTRIBUTE_HOT _GL_ATTRIBUTE_NOTHROW const char *boyer_moore_strncasestr(const char *s, const char *find, const size_t s_len, const size_t f_len,
+                                                                                                             const size_t alpha_skip_lookup[], const size_t *find_skip_lookup) {
     ssize_t i;
     size_t pos = f_len - 1;
 
@@ -248,26 +246,24 @@ const char *boyer_moore_strncasestr(const char *s, const char *find, const size_
  * 0x00 will be cut off, so you could call this example with
  * boyermoore_horspool_strcasestr(haystack, hlen, "abc", sizeof("abc")-1)
  */
-static inline _GL_ATTRIBUTE_PURE _GL_ATTRIBUTE_HOT _GL_ATTRIBUTE_NOTHROW
-const char *boyer_moore_horspool_strnstr(const char* haystack, const char* needle, size_t hlen, size_t nlen,
-                                         const size_t bad_char_skip_lookup[], const size_t *find_skip_lookup) {
+static inline _GL_ATTRIBUTE_PURE _GL_ATTRIBUTE_HOT _GL_ATTRIBUTE_NOTHROW const char *boyer_moore_horspool_strnstr(const char *haystack, const char *needle, size_t hlen, size_t nlen,
+                                                                                                                  const size_t bad_char_skip_lookup[], const size_t *find_skip_lookup) {
     printf("In boyer_moore_horspool_strnstr\n");
-    
+
     /* Sanity checks on the parameters */
     if (nlen <= 0 || !haystack || !needle)
         return NULL;
 
     size_t scan = 0;
-    
+
     /* C arrays have the first byte at [0], therefore:
      * [nlen - 1] is the last byte of the array. */
     size_t last = nlen - 1;
-                                              
+
     /* ---- Do the matching ---- */
 
     /* Search the haystack, while the needle can still be within it. */
-    while (hlen >= nlen)
-    {
+    while (hlen >= nlen) {
         /* scan from the end of the needle */
         for (scan = last; haystack[scan] == needle[scan]; --scan)
             if (scan == 0) /* If the first byte matches, we've found it. */
@@ -282,7 +278,7 @@ const char *boyer_moore_horspool_strnstr(const char* haystack, const char* needl
            the last character is slower in the normal case (E.g. finding
            "abcd" in "...azcd..." gives 4 by using 'd' but only
            4-2==2 using 'z'. */
-        hlen     -= bad_char_skip_lookup[haystack[last]];
+        hlen -= bad_char_skip_lookup[haystack[last]];
         haystack += bad_char_skip_lookup[haystack[last]];
     }
 
@@ -298,10 +294,9 @@ const char *boyer_moore_horspool_strnstr(const char* haystack, const char* needl
  * 0x00 will be cut off, so you could call this example with
  * boyermoore_horspool_strcasestr(haystack, hlen, "abc", sizeof("abc")-1)
  */
-static inline _GL_ATTRIBUTE_PURE _GL_ATTRIBUTE_HOT _GL_ATTRIBUTE_NOTHROW
-const char *boyer_moore_horspool_strncasestr(const char* haystack, const char* needle, size_t hlen, size_t nlen,
-                                             const size_t bad_char_skip_lookup[], const size_t *find_skip_lookup) {
-    printf("In boyer_moore_horspool_strncasestr\n");    
+static inline _GL_ATTRIBUTE_PURE _GL_ATTRIBUTE_HOT _GL_ATTRIBUTE_NOTHROW const char *boyer_moore_horspool_strncasestr(const char *haystack, const char *needle, size_t hlen, size_t nlen,
+                                                                                                                      const size_t bad_char_skip_lookup[], const size_t *find_skip_lookup) {
+    printf("In boyer_moore_horspool_strncasestr\n");
     /* Sanity checks on the parameters */
     if (nlen <= 0 || !haystack || !needle)
         return NULL;
@@ -311,12 +306,11 @@ const char *boyer_moore_horspool_strncasestr(const char* haystack, const char* n
     /* C arrays have the first byte at [0], therefore:
      * [nlen - 1] is the last byte of the array. */
     size_t last = nlen - 1;
-    
+
     /* ---- Do the matching ---- */
 
     /* Search the haystack, while the needle can still be within it. */
-    while (hlen >= nlen)
-    {
+    while (hlen >= nlen) {
         /* scan from the end of the needle */
         for (scan = last; tolower(haystack[scan]) == needle[scan]; --scan)
             if (scan == 0) /* If the first byte matches, we've found it. */
@@ -331,7 +325,7 @@ const char *boyer_moore_horspool_strncasestr(const char* haystack, const char* n
            the last character is slower in the normal case (E.g. finding
            "abcd" in "...azcd..." gives 4 by using 'd' but only
            4-2==2 using 'z'. */
-        hlen     -= bad_char_skip_lookup[haystack[last]];
+        hlen -= bad_char_skip_lookup[haystack[last]];
         haystack += bad_char_skip_lookup[haystack[last]];
     }
 
@@ -344,8 +338,7 @@ strncmp_fp get_strstr(enum case_behavior casing, enum algorithm_type algorithm) 
 
     if (algorithm == ALGORITHM_BOYER_MOORE) {
         ag_strncmp_fp = (casing == CASE_INSENSITIVE) ? &boyer_moore_strncasestr : &boyer_moore_strnstr;
-    }
-    else if (algorithm == ALGORITHM_BOYER_MOORE_HORSPOOL) {
+    } else if (algorithm == ALGORITHM_BOYER_MOORE_HORSPOOL) {
         ag_strncmp_fp = (casing == CASE_INSENSITIVE) ? &boyer_moore_horspool_strncasestr : &boyer_moore_horspool_strnstr;
     }
 
@@ -372,7 +365,8 @@ NO_SANITIZE_ALIGNMENT const char *hash_strnstr(const char *s, const char *find, 
                     goto next_hash_cell;
             }
             return R; // Found
-        next_hash_cell:;
+        next_hash_cell:
+            ;
         }
     }
     // Check tail
@@ -385,7 +379,8 @@ NO_SANITIZE_ALIGNMENT const char *hash_strnstr(const char *s, const char *find, 
                 goto next_start;
         }
         return R;
-    next_start:;
+    next_start:
+        ;
     }
     return NULL;
 }

@@ -17,7 +17,7 @@ symdir_t *symhash = NULL;
 
 /* Returns: -1 if skipped, otherwise # of matches */
 ssize_t search_buf(const char *buf, const size_t buf_len,
-                const char *dir_full_path) {
+                   const char *dir_full_path) {
     int binary = -1; /* 1 = yes, 0 = no, -1 = don't know */
     size_t buf_offset = 0;
 
@@ -74,7 +74,7 @@ ssize_t search_buf(const char *buf, const size_t buf_len,
             }
 #else
             match_ptr = ag_strnstr_fp(match_ptr, opts.query, buf_len - buf_offset, opts.query_len, lookup, find_skip_lookup, opts.casing == CASE_INSENSITIVE);
-            //match_ptr = boyer_moore_strnstr(match_ptr, opts.query, buf_len - buf_offset, opts.query_len, alpha_skip_lookup, find_skip_lookup, opts.casing == CASE_INSENSITIVE);
+//match_ptr = boyer_moore_strnstr(match_ptr, opts.query, buf_len - buf_offset, opts.query_len, alpha_skip_lookup, find_skip_lookup, opts.casing == CASE_INSENSITIVE);
 #endif
 
             if (match_ptr == NULL) {
@@ -329,7 +329,7 @@ void search_file(const char *file_full_path) {
         if (opts.query[0] == '.' && opts.query_len == 1 && !opts.literal && opts.search_all_files) {
             matches_count = search_buf(buf, f_len, file_full_path);
         } else {
-        log_debug("Skipping %s: file is empty.", file_full_path);
+            log_debug("Skipping %s: file is empty.", file_full_path);
         }
         goto cleanup;
     }
@@ -361,14 +361,14 @@ void search_file(const char *file_full_path) {
 
     if (opts.mmap) {
         buf = mmap(0, f_len, PROT_READ, MAP_PRIVATE, fd, 0);
-    if (buf == MAP_FAILED) {
-        log_err("File %s failed to load: %s.", file_full_path, strerror(errno));
-        goto cleanup;
-    }
+        if (buf == MAP_FAILED) {
+            log_err("File %s failed to load: %s.", file_full_path, strerror(errno));
+            goto cleanup;
+        }
 #if HAVE_MADVISE
-    madvise(buf, f_len, MADV_SEQUENTIAL);
+        madvise(buf, f_len, MADV_SEQUENTIAL);
 #elif HAVE_POSIX_FADVISE
-    posix_fadvise(fd, 0, f_len, POSIX_MADV_SEQUENTIAL);
+        posix_fadvise(fd, 0, f_len, POSIX_MADV_SEQUENTIAL);
 #endif
     } else {
         buf = ag_malloc(f_len);
@@ -433,7 +433,7 @@ cleanup:
 #else
         if (opts.mmap) {
             if (buf != MAP_FAILED) {
-        munmap(buf, f_len);
+                munmap(buf, f_len);
             }
         } else {
             free(buf);
