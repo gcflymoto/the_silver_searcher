@@ -19,6 +19,8 @@ struct ignores {
 
     char **regexes; /* For patterns that need fnmatch */
     size_t regexes_len;
+    char **invert_regexes; /* For "!" patterns */
+    size_t invert_regexes_len;
     char **slash_regexes;
     size_t slash_regexes_len;
 
@@ -31,7 +33,7 @@ struct ignores {
 };
 typedef struct ignores ignores;
 
-ignores *root_ignores;
+extern ignores *root_ignores;
 
 extern const char *evil_hardcoded_ignore_files[];
 extern const char *ignore_pattern_files[];

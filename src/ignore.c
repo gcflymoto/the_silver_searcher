@@ -20,6 +20,8 @@
 const int fnmatch_flags = FNM_PATHNAME;
 #endif
 
+ignores *root_ignores;
+
 /* TODO: build a huge-ass list of files we want to ignore by default (build cache stuff, pyc files, etc) */
 
 const char *evil_hardcoded_ignore_files[] = {
@@ -38,9 +40,9 @@ const char *evil_hardcoded_ignore_files[] = {
     NULL
 };
 
-/* Warning: changing the first string will break skip_vcs_ignores. */
+/* Warning: changing the first two strings will break skip_vcs_ignores. */
 const char *ignore_pattern_files[] = {
-    ".agignore",
+    ".ignore",
     ".gitignore",
     ".git/info/exclude",
     ".hgignore",
@@ -62,6 +64,8 @@ ignores *init_ignore(ignores *parent, const char *dirname, const size_t dirname_
     ig->slash_names_len = 0;
     ig->regexes = NULL;
     ig->regexes_len = 0;
+    ig->invert_regexes = NULL;
+    ig->invert_regexes_len = 0;
     ig->slash_regexes = NULL;
     ig->slash_regexes_len = 0;
     ig->dirname = dirname;
@@ -95,6 +99,7 @@ void cleanup_ignore(ignores *ig) {
     free_strings(ig->names, ig->names_len);
     free_strings(ig->slash_names, ig->slash_names_len);
     free_strings(ig->regexes, ig->regexes_len);
+    free_strings(ig->invert_regexes, ig->invert_regexes_len);
     free_strings(ig->slash_regexes, ig->slash_regexes_len);
     if (ig->abs_path) {
         free(ig->abs_path);
@@ -126,13 +131,19 @@ void add_ignore_pattern(ignores *ig, const char *pattern) {
     char ***patterns_p;
     size_t *patterns_len;
     if (is_fnmatch(pattern)) {
-        if (pattern[0] == '*' && pattern[1] == '.' && !(is_fnmatch(pattern + 2))) {
+        if (pattern[0] == '*' && pattern[1] == '.' && strchr(pattern + 2, '.') && !is_fnmatch(pattern + 2)) {
             patterns_p = &(ig->extensions);
             patterns_len = &(ig->extensions_len);
             pattern += 2;
+            pattern_len -= 2;
         } else if (pattern[0] == '/') {
             patterns_p = &(ig->slash_regexes);
             patterns_len = &(ig->slash_regexes_len);
+            pattern++;
+            pattern_len--;
+        } else if (pattern[0] == '!') {
+            patterns_p = &(ig->invert_regexes);
+            patterns_len = &(ig->invert_regexes_len);
             pattern++;
             pattern_len--;
         } else {
@@ -286,6 +297,7 @@ static int ackmate_dir_match(const char *dir_name) {
 /* This is the hottest code in Ag. 10-15% of all execution time is spent here */
 static int path_ignore_search(const ignores *ig, const char *path, const char *filename) {
     char *temp;
+    int temp_start_pos;
     size_t i;
     int match_pos;
 
@@ -296,9 +308,12 @@ static int path_ignore_search(const ignores *ig, const char *path, const char *f
     }
 
     ag_asprintf(&temp, "%s/%s", path[0] == '.' ? path + 1 : path, filename);
+    //ig->abs_path has its leading slash stripped, so we have to strip the leading slash
+    //of temp as well
+    temp_start_pos = (temp[0] == '/') ? 1 : 0;
 
-    if (strncmp(temp, ig->abs_path, ig->abs_path_len) == 0) {
-        char *slash_filename = temp + ig->abs_path_len;
+    if (strncmp(temp + temp_start_pos, ig->abs_path, ig->abs_path_len) == 0) {
+        char *slash_filename = temp + temp_start_pos + ig->abs_path_len;
         if (slash_filename[0] == '/') {
             slash_filename++;
         }
@@ -339,6 +354,15 @@ static int path_ignore_search(const ignores *ig, const char *path, const char *f
         }
     }
 
+    for (i = 0; i < ig->invert_regexes_len; i++) {
+        if (fnmatch(ig->invert_regexes[i], filename, fnmatch_flags) == 0) {
+            log_debug("file %s not ignored because name matches regex pattern !%s", filename, ig->invert_regexes[i]);
+            free(temp);
+            return 0;
+        }
+        log_debug("pattern !%s doesn't match file %s", ig->invert_regexes[i], filename);
+    }
+
     for (i = 0; i < ig->regexes_len; i++) {
         if (fnmatch(ig->regexes[i], filename, fnmatch_flags) == 0) {
             log_debug("file %s ignored because name matches regex pattern %s", filename, ig->regexes[i]);
@@ -373,24 +397,16 @@ int filename_filter(const char *path, const struct dirent *dir, void *baton) {
     }
 
     if (is_named_pipe(path, dir)) {
-        log_debug("%s ignored because it's a named pipe", path);
+        log_debug("%s ignored because it's a named pipe or socket", path);
         return 0;
     }
 
-    if (opts.search_all_files && !opts.path_to_agignore) {
+    if (opts.search_all_files && !opts.path_to_ignore) {
         return 1;
     }
 
     scandir_baton_t *scandir_baton = (scandir_baton_t *)baton;
-    const char *base_path = scandir_baton->base_path;
-    const size_t base_path_len = scandir_baton->base_path_len;
-    const char *path_start = path;
-
-    for (i = 0; base_path[i] == path[i] && i < base_path_len; i++) {
-        /* base_path always ends with "/\0" while path doesn't, so this is safe */
-        path_start = path + i + 2;
-    }
-    log_debug("path_start %s filename %s", path_start, filename);
+    const char *path_start = scandir_baton->path_start;
 
     const char *extension = strchr(filename, '.');
     if (extension) {
@@ -403,20 +419,23 @@ int filename_filter(const char *path, const struct dirent *dir, void *baton) {
         }
     }
 
-/* TODO: don't call strlen on filename every time we call filename_filter() */
 #ifdef HAVE_DIRENT_DNAMLEN
     size_t filename_len = dir->d_namlen;
 #else
-    size_t filename_len = strlen(filename);
+    size_t filename_len = 0;
 #endif
-    const ignores *ig = scandir_baton->ig;
 
-    while (ig != NULL) {
-        if (strncmp(filename, "./", 2) == 0) {
+    if (strncmp(filename, "./", 2) == 0) {
+#ifndef HAVE_DIRENT_DNAMLEN
+        filename_len = strlen(filename);
+#endif
             filename++;
             filename_len--;
         }
 
+    const ignores *ig = scandir_baton->ig;
+
+    while (ig != NULL) {
         if (extension) {
             int match_pos = binary_search(extension, ig->extensions, 0, ig->extensions_len);
             if (match_pos >= 0) {
@@ -429,13 +448,20 @@ int filename_filter(const char *path, const struct dirent *dir, void *baton) {
             return 0;
         }
 
-        if (is_directory(path, dir) && filename[filename_len - 1] != '/') {
-            char *temp;
-            ag_asprintf(&temp, "%s/", filename);
-            int rv = path_ignore_search(ig, path_start, temp);
-            free(temp);
-            if (rv) {
-                return 0;
+        if (is_directory(path, dir)) {
+#ifndef HAVE_DIRENT_DNAMLEN
+            if (!filename_len) {
+                filename_len = strlen(filename);
+            }
+#endif
+            if (filename[filename_len - 1] != '/') {
+                char *temp;
+                ag_asprintf(&temp, "%s/", filename);
+                int rv = path_ignore_search(ig, path_start, temp);
+                free(temp);
+                if (rv) {
+                    return 0;
+                }
             }
         }
         ig = ig->parent;

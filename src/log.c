@@ -1,9 +1,10 @@
-#include <stdio.h>
 #include <stdarg.h>
+#include <stdio.h>
 
 #include "log.h"
 #include "util.h"
 
+pthread_mutex_t print_mtx = PTHREAD_MUTEX_INITIALIZER;
 static enum log_level log_threshold = LOG_LEVEL_ERR;
 
 void set_log_level(enum log_level threshold) {
@@ -43,6 +44,7 @@ void vplog(const unsigned int level, const char *fmt, va_list args) {
         return;
     }
 
+    pthread_mutex_lock(&print_mtx);
     FILE *stream = out_fd;
 
     switch (level) {
@@ -63,6 +65,7 @@ void vplog(const unsigned int level, const char *fmt, va_list args) {
 
     vfprintf(stream, fmt, args);
     fprintf(stream, "\n");
+    pthread_mutex_unlock(&print_mtx);
 }
 
 void plog(const unsigned int level, const char *fmt, ...) {

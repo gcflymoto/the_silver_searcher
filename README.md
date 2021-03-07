@@ -6,16 +6,16 @@ A code searching tool similar to `ack`, with a focus on speed.
 
 [![Floobits Status](https://floobits.com/ggreer/ag.svg)](https://floobits.com/ggreer/ag/redirect)
 
-[![#ag on Freenode](http://img.shields.io/Freenode/%23ag.png)](https://webchat.freenode.net/?channels=ag)
+[![#ag on Freenode](https://img.shields.io/badge/Freenode-%23ag-brightgreen.svg)](https://webchat.freenode.net/?channels=ag)
 
-Do you know C? I invite you to pair with me to [help me get to Ag 1.0](http://geoff.greer.fm/2014/10/13/help-me-get-to-ag-10/).
+Do you know C? Want to improve ag? [I invite you to pair with me](http://geoff.greer.fm/2014/10/13/help-me-get-to-ag-10/).
 
 
 ## What's so great about Ag?
 
 * It is an order of magnitude faster than `ack`.
 * It ignores file patterns from your `.gitignore` and `.hgignore`.
-* If there are files in your source repo you don't want to search, just add their patterns to a `.agignore` file. (\*cough\* extern \*cough\*)
+* If there are files in your source repo you don't want to search, just add their patterns to a `.ignore` file. (\*cough\* `*.min.js` \*cough\*)
 * The command name is 33% shorter than `ack`, and all keys are on the home row!
 
 Ag is quite stable now. Most changes are new features, minor bug fixes, or performance improvements. It's much faster than Ack in my benchmarks:
@@ -24,7 +24,7 @@ Ag is quite stable now. Most changes are new features, minor bug fixes, or perfo
 
     ag test_blah ~/code/  4.67s user 4.58s system 286% cpu 3.227 total
 
-Ack and Ag found the same results, but Ag was 34x faster (3.2 seconds vs 110 seconds). My `~/code` directory is about 8GB. Thanks to git/hg/svn-ignore, Ag only searched 700MB of that.
+Ack and Ag found the same results, but Ag was 34x faster (3.2 seconds vs 110 seconds). My `~/code` directory is about 8GB. Thanks to git/hg/ignore, Ag only searched 700MB of that.
 
 There are also [graphs of performance across releases](http://geoff.greer.fm/ag/speed/).
 
@@ -42,7 +42,7 @@ I've written several blog posts showing how I've improved performance. These inc
 
 ## Installing
 
-### OS X
+### macOS
 
     brew install the_silver_searcher
 
@@ -64,11 +64,10 @@ or
         dnf install the_silver_searcher
 * RHEL7+
 
-        rpm -Uvh http://download.fedoraproject.org/pub/epel/7/x86_64/e/epel-release-7-5.noarch.rpm
-        yum install the_silver_searcher
+        yum install epel-release.noarch the_silver_searcher
 * Gentoo
 
-        emerge the_silver_searcher
+        emerge -a sys-apps/the_silver_searcher
 * Arch
 
         pacman -S the_silver_searcher
@@ -76,6 +75,20 @@ or
 * Slackware
 
         sbopkg -i the_silver_searcher
+
+* openSUSE
+
+        zypper install the_silver_searcher
+
+* CentOS
+
+        yum install the_silver_searcher
+
+* NixOS/Nix/Nixpkgs
+
+        nix-env -iA silver-searcher
+
+* SUSE Linux Enterprise: Follow [these simple instructions](https://software.opensuse.org/download.html?project=utilities&package=the_silver_searcher).
 
 
 ### BSD
@@ -87,16 +100,42 @@ or
 
         pkg_add the_silver_searcher
 
-### Cygwin
+### Windows
 
-Run the relevant [`setup-*.exe`](https://cygwin.com/install.html), and select "the\_silver\_searcher" in the "Utils" category.
+* Win32/64
+
+  Unofficial daily builds are [available](https://github.com/k-takata/the_silver_searcher-win32).
+  
+* winget
+
+        winget install "The Silver Searcher"
+  
+  Notes:
+  - This installs a [release](https://github.com/JFLarvoire/the_silver_searcher/releases) of ag.exe optimized for Windows.
+  - winget is intended to become the default package manager client for Windows.  
+    As of June 2020, it's still in beta, and can be installed using instructions [there](https://github.com/microsoft/winget-cli).
+  - The setup script in the Ag's winget package installs ag.exe in the first directory that matches one of these criteria:
+     1. Over a previous instance of ag.exe *from the same [origin](https://github.com/JFLarvoire/the_silver_searcher)* found in the PATH
+     2. In the directory defined in environment variable bindir_%PROCESSOR_ARCHITECTURE%
+     3. In the directory defined in environment variable bindir
+     4. In the directory defined in environment variable windir
+  
+* Chocolatey
+
+        choco install ag
+* MSYS2
+
+        pacman -S mingw-w64-{i686,x86_64}-ag
+* Cygwin
+
+  Run the relevant [`setup-*.exe`](https://cygwin.com/install.html), and select "the\_silver\_searcher" in the "Utils" category.
 
 ## Building from source
 
 ### Building master
 
 1. Install dependencies (Automake, pkg-config, PCRE, LZMA):
-    * OS X:
+    * macOS:
 
             brew install automake pkg-config pcre xz
         or
@@ -111,13 +150,17 @@ Run the relevant [`setup-*.exe`](https://cygwin.com/install.html), and select "t
     * CentOS:
 
             yum -y groupinstall "Development Tools"
-            yum -y install pcre-devel xz-devel
+            yum -y install pcre-devel xz-devel zlib-devel
+    * openSUSE:
+
+            zypper source-install --build-deps-only the_silver_searcher
+
     * Windows: It's complicated. See [this wiki page](https://github.com/ggreer/the_silver_searcher/wiki/Windows).
 2. Run the build script (which just runs aclocal, automake, etc):
 
         ./build.sh
 
-  On Windows (inside an msys/MinGW shell):
+   On Windows (inside an msys/MinGW shell):
 
         make -f Makefile.w32
 3. Make install:
@@ -142,7 +185,7 @@ You may need to use `sudo` or run as root for the make install.
 
 ### Vim
 
-You can use Ag with [ack.vim][] by adding the following line to your `.vimrc`:
+You can use Ag with [ack.vim](https://github.com/mileszs/ack.vim) by adding the following line to your `.vimrc`:
 
     let g:ackprg = 'ag --nogroup --nocolor --column'
 
@@ -152,13 +195,9 @@ or:
 
 Which has the same effect but will report every match on the line.
 
-There's also a fork of ack.vim tailored for use with Ag: [ag.vim][]
-[ack.vim]: https://github.com/mileszs/ack.vim
-[ag.vim]: https://github.com/rking/ag.vim
-
 ### Emacs
 
-You can use [ag.el][] as an Emacs fronted to Ag. See also: [helm-ag].
+You can use [ag.el][] as an Emacs front-end to Ag. See also: [helm-ag].
 
 [ag.el]: https://github.com/Wilfred/ag.el
 [helm-ag]: https://github.com/syohex/emacs-helm-ag
@@ -169,10 +208,10 @@ TextMate users can use Ag with [my fork](https://github.com/ggreer/AckMate) of t
 
 ## Other stuff you might like
 
-* [Ack](https://github.com/petdance/ack2) - Better than grep. Without Ack, Ag would not exist.
-* [AckMate](https://github.com/protocool/AckMate) - An ack-powered replacement for TextMate's slow built-in search.
+* [Ack](https://github.com/petdance/ack3) - Better than grep. Without Ack, Ag would not exist.
 * [ack.vim](https://github.com/mileszs/ack.vim)
-* [ag.vim]( https://github.com/rking/ag.vim)
 * [Exuberant Ctags](http://ctags.sourceforge.net/) - Faster than Ag, but it builds an index beforehand. Good for *really* big codebases.
 * [Git-grep](http://git-scm.com/docs/git-grep) - As fast as Ag but only works on git repos.
+* [fzf](https://github.com/junegunn/fzf) - A command-line fuzzy finder 
+* [ripgrep](https://github.com/BurntSushi/ripgrep)
 * [Sack](https://github.com/sampson-chen/sack) - A utility that wraps Ack and Ag. It removes a lot of repetition from searching and opening matching files.

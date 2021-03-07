@@ -1,13 +1,12 @@
 #include <ctype.h>
-#include <string.h>
-#include <stdio.h>
 #include <stdarg.h>
+#include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <sys/stat.h>
-#include <limits.h>
 
-#include "util.h"
 #include "config.h"
+#include "util.h"
 
 #ifdef _WIN32
 #include <windows.h>
@@ -22,6 +21,8 @@
     }                                     \
     return ptr;
 
+FILE *out_fd = NULL;
+ag_stats stats;
 void *ag_malloc(size_t size) {
     void *ptr = malloc(size);
     CHECK_AND_RETURN(ptr)
@@ -76,10 +77,10 @@ void generate_alpha_skip(const char *find, size_t f_len, size_t skip_lookup[], c
 
     for (i = 0; i < f_len; i++) {
         if (case_sensitive) {
-            skip_lookup[find[i]] = f_len - i;
+            skip_lookup[(unsigned char)find[i]] = f_len - i;
         } else {
-            skip_lookup[tolower(find[i])] = f_len - i;
-            skip_lookup[toupper(find[i])] = f_len - i;
+            skip_lookup[(unsigned char)tolower(find[i])] = f_len - i;
+            skip_lookup[(unsigned char)toupper(find[i])] = f_len - i;
         }
     }
 }
@@ -173,6 +174,32 @@ void generate_find_skip(const char *find, const size_t f_len, size_t **skip_look
 
 #define AG_MAX(a, b) ((b > a) ? b : a)
 
+void generate_hash(const char *find, const size_t f_len, uint8_t *h_table, const int case_sensitive) {
+    int i;
+    for (i = f_len - sizeof(uint16_t); i >= 0; i--) {
+        // Add all 2^sizeof(uint16_t) combinations of capital letters to the hash table
+        int caps_set;
+        for (caps_set = 0; caps_set < (1 << sizeof(uint16_t)); caps_set++) {
+            word_t word;
+            memcpy(&word.as_chars, find + i, sizeof(uint16_t));
+            int cap_index;
+            // Capitalize the letters whose corresponding bits in caps_set are 1
+            for (cap_index = 0; caps_set >> cap_index; cap_index++) {
+                if ((caps_set >> cap_index) & 1)
+                    word.as_chars[cap_index] -= 'a' - 'A';
+            }
+            size_t h;
+            // Find next free cell
+            for (h = word.as_word % H_SIZE; h_table[h]; h = (h + 1) % H_SIZE)
+                ;
+            h_table[h] = i + 1;
+            // Don't add capital letters if case sensitive
+            if (case_sensitive)
+                break;
+        }
+    }
+}
+
 /* Boyer-Moore strstr */
 static inline _GL_ATTRIBUTE_PURE _GL_ATTRIBUTE_HOT _GL_ATTRIBUTE_NOTHROW
 const char *boyer_moore_strnstr(const char *s, const char *find, const size_t s_len, const size_t f_len,
@@ -181,20 +208,22 @@ const char *boyer_moore_strnstr(const char *s, const char *find, const size_t s_
     size_t pos = f_len - 1;
 
     while (pos < s_len) {
-        for (i = f_len - 1; i >= 0 && s[pos] == find[i]; --pos, --i);
+        for (i = f_len - 1; i >= 0 && s[pos] == find[i]; pos--, i--) {
+        }
         if (i < 0) {
             return s + pos + 1;
         }
-        pos += AG_MAX(alpha_skip_lookup[s[pos]], find_skip_lookup[i]);
+        pos += AG_MAX(alpha_skip_lookup[(unsigned char)s[pos]], find_skip_lookup[i]);
     }
 
     return NULL;
 }
 
+
 /* Copy-pasted from above. Yes I know this is bad. One day I might even fix it. */
 static inline _GL_ATTRIBUTE_PURE _GL_ATTRIBUTE_HOT _GL_ATTRIBUTE_NOTHROW
 const char *boyer_moore_strncasestr(const char *s, const char *find, const size_t s_len, const size_t f_len,
-                                             const size_t alpha_skip_lookup[], const size_t *find_skip_lookup) {
+                                    const size_t alpha_skip_lookup[], const size_t *find_skip_lookup) {
     ssize_t i;
     size_t pos = f_len - 1;
 
@@ -204,7 +233,7 @@ const char *boyer_moore_strncasestr(const char *s, const char *find, const size_
         if (i < 0) {
             return s + pos + 1;
         }
-        pos += AG_MAX(alpha_skip_lookup[s[pos]], find_skip_lookup[i]);
+        pos += AG_MAX(alpha_skip_lookup[(unsigned char)s[pos]], find_skip_lookup[i]);
     }
 
     return NULL;
@@ -323,6 +352,44 @@ strncmp_fp get_strstr(enum case_behavior casing, enum algorithm_type algorithm) 
     return ag_strncmp_fp;
 }
 
+// Clang's -fsanitize=alignment (included in -fsanitize=undefined) will flag
+// the intentional unaligned access here, so suppress it for this function
+NO_SANITIZE_ALIGNMENT const char *hash_strnstr(const char *s, const char *find, const size_t s_len, const size_t f_len, uint8_t *h_table, const int case_sensitive) {
+    if (s_len < f_len)
+        return NULL;
+
+    // Step through s
+    const size_t step = f_len - sizeof(uint16_t) + 1;
+    size_t s_i = f_len - sizeof(uint16_t);
+    for (; s_i <= s_len - f_len; s_i += step) {
+        size_t h;
+        for (h = *(const uint16_t *)(s + s_i) % H_SIZE; h_table[h]; h = (h + 1) % H_SIZE) {
+            const char *R = s + s_i - (h_table[h] - 1);
+            size_t i;
+            // Check putative match
+            for (i = 0; i < f_len; i++) {
+                if ((case_sensitive ? R[i] : tolower(R[i])) != find[i])
+                    goto next_hash_cell;
+            }
+            return R; // Found
+        next_hash_cell:;
+        }
+    }
+    // Check tail
+    for (s_i = s_i - step + 1; s_i <= s_len - f_len; s_i++) {
+        size_t i;
+        const char *R = s + s_i;
+        for (i = 0; i < f_len; i++) {
+            char s_c = case_sensitive ? R[i] : tolower(R[i]);
+            if (s_c != find[i])
+                goto next_start;
+        }
+        return R;
+    next_start:;
+    }
+    return NULL;
+}
+
 size_t invert_matches(const char *buf, const size_t buf_len, match_t matches[], size_t matches_len) {
     size_t i;
     size_t match_read_index = 0;
@@ -421,6 +488,7 @@ int is_binary(const void *buf, const size_t buf_len) {
     size_t i;
 
     if (buf_len == 0) {
+        /* Is an empty file binary? Is it text? */
         return 0;
     }
 
@@ -536,7 +604,7 @@ void init_wordchar_table(void) {
 }
 
 int is_wordchar(char ch) {
-    return wordchar_table[ch];
+    return wordchar_table[(unsigned char)ch];
 }
 
 int is_lowercase(const char *s) {
@@ -601,8 +669,8 @@ int is_symlink(const char *path, const struct dirent *d) {
 
 int is_named_pipe(const char *path, const struct dirent *d) {
 #ifdef HAVE_DIRENT_DTYPE
-    if (d->d_type != DT_UNKNOWN) {
-        return d->d_type == DT_FIFO;
+    if (d->d_type != DT_UNKNOWN && d->d_type != DT_LNK) {
+        return d->d_type == DT_FIFO || d->d_type == DT_SOCK;
     }
 #endif
     char *full_path;
@@ -613,7 +681,11 @@ int is_named_pipe(const char *path, const struct dirent *d) {
         return FALSE;
     }
     free(full_path);
-    return S_ISFIFO(s.st_mode);
+    return S_ISFIFO(s.st_mode)
+#ifdef S_ISSOCK
+           || S_ISSOCK(s.st_mode)
+#endif
+        ;
 }
 
 void ag_asprintf(char **ret, const char *fmt, ...) {
@@ -705,7 +777,7 @@ ssize_t getline(char **lineptr, size_t *n, FILE *stream) {
 ssize_t buf_getline(const char **line, const char *buf, const size_t buf_len, const size_t buf_offset) {
     const char *cur = buf + buf_offset;
     ssize_t i;
-    for (i = 0; cur[i] != '\n' && (buf_offset + i < buf_len); i++) {
+    for (i = 0; (buf_offset + i < buf_len) && cur[i] != '\n'; i++) {
     }
     *line = cur;
     return i;

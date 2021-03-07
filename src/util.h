@@ -3,16 +3,16 @@
 
 #include <dirent.h>
 #include <pcre.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <string.h>
-#include <stdio.h>
 #include <sys/time.h>
 
 #include "config.h"
 #include "log.h"
 #include "options.h"
 
-FILE *out_fd;
+extern FILE *out_fd;
 
 #ifndef TRUE
 #define TRUE 1
@@ -22,12 +22,12 @@ FILE *out_fd;
 #define FALSE 0
 #endif
 
-/* The __attribute__ feature is available in gcc versions 2.5 and later.
-The attribute __pure__ was added in gcc 2.96. */
-#if __GNUC__ > 2 || (__GNUC__ == 2 && __GNUC_MINOR__ >= 96)
-# define _GL_ATTRIBUTE_PURE __attribute__ ((__pure__))
+#define H_SIZE (64 * 1024)
+
+#ifdef __clang__
+#define NO_SANITIZE_ALIGNMENT __attribute__((no_sanitize("alignment")))
 #else
-# define _GL_ATTRIBUTE_PURE /* empty */
+#define NO_SANITIZE_ALIGNMENT
 #endif
 
 # define _GL_ATTRIBUTE_HOT __attribute__ ((__hot__))
@@ -47,16 +47,22 @@ typedef struct {
 } match_t;
 
 typedef struct {
-    long total_bytes;
-    long total_files;
-    long total_matches;
-    long total_file_matches;
+    size_t total_bytes;
+    size_t total_files;
+    size_t total_matches;
+    size_t total_file_matches;
     struct timeval time_start;
     struct timeval time_end;
 } ag_stats;
 
 
-ag_stats stats;
+extern ag_stats stats;
+
+/* Union to translate between chars and words without violating strict aliasing */
+typedef union {
+    char as_chars[sizeof(uint16_t)];
+    uint16_t as_word;
+} word_t;
 
 typedef const char *(*strncmp_fp)(const char *, const char *, const size_t, const size_t, const size_t[], const size_t *);
 
@@ -66,6 +72,7 @@ void generate_alpha_skip(const char *find, size_t f_len, size_t skip_lookup[], c
 int is_prefix(const char *s, const size_t s_len, const size_t pos, const int case_sensitive);
 size_t suffix_len(const char *s, const size_t s_len, const size_t pos, const int case_sensitive);
 void generate_find_skip(const char *find, const size_t f_len, size_t **skip_lookup, const int case_sensitive);
+void generate_hash(const char *find, const size_t f_len, uint8_t *H, const int case_sensitive);
 void generate_bad_char_skip(const char *needle, size_t nlen, size_t bad_char_skip_lookup[], const int case_sensitive);
 
 const char *boyer_moore_strnstr(const char *s, const char *find, const size_t s_len, const size_t f_len,
@@ -80,12 +87,13 @@ const char *boyer_moore_horspool_strnstr(const char* haystack, const char* needl
 const char *boyer_moore_horspool_strncasestr(const char* haystack, const char* needle, size_t hlen, size_t nlen,
                                              const size_t bad_char_skip_lookup[], const size_t *find_skip_lookup)
                                              _GL_ATTRIBUTE_PURE _GL_ATTRIBUTE_HOT _GL_ATTRIBUTE_NOTHROW;
-
+const char *hash_strnstr(const char *s, const char *find, const size_t s_len, const size_t f_len, uint8_t *h_table, const int case_sensitive);
 strncmp_fp get_strstr(enum case_behavior casing, enum algorithm_type algorithm);
 
 size_t invert_matches(const char *buf, const size_t buf_len, match_t matches[], size_t matches_len);
 void realloc_matches(match_t **matches, size_t *matches_size, size_t matches_len);
 void compile_study(pcre **re, pcre_extra **re_extra, char *q, const int pcre_opts, const int study_opts);
+
 
 int is_binary(const void *buf, const size_t buf_len);
 int is_regex(const char *query);
