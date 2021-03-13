@@ -3,9 +3,9 @@ Setup and create really big file:
   $ . $TESTDIR/../setup.sh
   $ python3 $TESTDIR/create_big_file.py $TESTDIR/big_file.txt
 
-Search a big file:
+Search a big file with regex:
 
-  $ $TESTDIR/../../ag --nocolor --workers=1 --parallel hello $TESTDIR/big_file.txt
+  $ $TESTDIR/../../ag --nocolor --workers=1 --parallel 'hello.*' $TESTDIR/big_file.txt
   33554432:hello1073741824
   67108864:hello2147483648
   100663296:hello3221225472

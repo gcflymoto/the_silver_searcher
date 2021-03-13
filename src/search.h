@@ -1,6 +1,7 @@
 #ifndef SEARCH_H
 #define SEARCH_H
 
+#include <limits.h>
 #include <dirent.h>
 #include <errno.h>
 #include <fcntl.h>

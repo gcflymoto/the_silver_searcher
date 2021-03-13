@@ -13,6 +13,9 @@
 #include "lang.h"
 #include "log.h"
 #include "options.h"
+#ifdef HAVE_PCRE2
+#include "pcre_api.h"
+#endif
 #include "print.h"
 #include "util.h"
 
@@ -127,11 +130,18 @@ can be found at http://geoff.greer.fm/ag\n");
 
 void print_version(void) {
     char jit = '-';
+    char pcre1 = '-';
+    char pcre2 = '-';
     char lzma = '-';
     char zlib = '-';
 
 #ifdef USE_PCRE_JIT
     jit = '+';
+#endif
+#ifdef HAVE_PCRE2
+    pcre2 = '+';
+#else
+    pcre1 = '+';
 #endif
 #ifdef HAVE_LZMA_H
     lzma = '+';
@@ -141,8 +151,11 @@ void print_version(void) {
 #endif
 
     printf("ag version %s\n\n", PACKAGE_VERSION);
+#ifdef HAVE_PCRE2
+    printf("pcre2 version %s\n", ag_pcre_version());
+#endif
     printf("Features:\n");
-    printf("  %cjit %clzma %czlib\n", jit, lzma, zlib);
+    printf("  %cjit %cpcre %cpcre2 %clzma %czlib\n", jit, pcre1, pcre2, lzma, zlib);
 }
 
 void init_options(void) {
@@ -176,6 +189,7 @@ void init_options(void) {
     opts.color_line_number = ag_strdup(color_line_number);
     opts.use_thread_affinity = TRUE;
     opts.algorithm = ALGORITHM_BOYER_MOORE;
+    opts.search_zip_files = 1; // gcflymoto - check/search compressed files without the need of additional switch
 }
 
 void cleanup_options(void) {
@@ -187,12 +201,20 @@ void cleanup_options(void) {
         free(opts.query);
     }
 
+#ifdef HAVE_PCRE2
+    // Note, ag_pcre_free_* will do NULL checks and set the pointer to NULL after freeing
+    ag_pcre_free_re(&opts.re);
+    ag_pcre_free_extra(&opts.re_extra);
+    ag_pcre_free_re(&opts.ackmate_dir_filter);
+    ag_pcre_free_extra(&opts.ackmate_dir_filter_extra);
+    ag_pcre_free_re(&opts.file_search_regex);
+    ag_pcre_free_extra(&opts.file_search_regex_extra);
+#else
     pcre_free(opts.re);
     if (opts.re_extra) {
         /* Using pcre_free_study on pcre_extra* can segfault on some versions of PCRE */
         pcre_free(opts.re_extra);
     }
-
     if (opts.ackmate_dir_filter) {
         pcre_free(opts.ackmate_dir_filter);
     }
@@ -206,6 +228,7 @@ void cleanup_options(void) {
     if (opts.file_search_regex_extra) {
         pcre_free(opts.file_search_regex_extra);
     }
+#endif
 }
 
 void parse_options(int argc, char **argv, char **base_paths[], char **paths[]) {
@@ -234,8 +257,6 @@ void parse_options(int argc, char **argv, char **base_paths[], char **paths[]) {
     option_t *longopts;
     char *lang_regex = NULL;
     size_t *ext_index = NULL;
-    char *extensions = NULL;
-    size_t num_exts = 0;
 
     init_options();
 
@@ -527,7 +548,11 @@ void parse_options(int argc, char **argv, char **base_paths[], char **paths[]) {
                 break;
             case 0: /* Long option */
                 if (strcmp(longopts[opt_index].name, "ackmate-dir-filter") == 0) {
+#ifdef HAVE_PCRE2
+                    ag_pcre_compile(&opts.ackmate_dir_filter, &opts.ackmate_dir_filter_extra, optarg, 0, 0);
+#else
                     compile_study(&opts.ackmate_dir_filter, &opts.ackmate_dir_filter_extra, optarg, 0, 0);
+#endif
                     break;
                 } else if (strcmp(longopts[opt_index].name, "depth") == 0) {
                     opts.max_search_depth = atoi(optarg);
@@ -614,30 +639,37 @@ void parse_options(int argc, char **argv, char **base_paths[], char **paths[]) {
     if (file_search_regex) {
         int pcre_opts = 0;
         if (opts.casing == CASE_INSENSITIVE || (opts.casing == CASE_SMART && is_lowercase(file_search_regex))) {
+#ifdef HAVE_PCRE2
+            pcre_opts |= AG_PCRE_CASELESS;
+#else
             pcre_opts |= PCRE_CASELESS;
+#endif
         }
         if (opts.word_regexp) {
             char *old_file_search_regex = file_search_regex;
             ag_asprintf(&file_search_regex, "\\b%s\\b", file_search_regex);
             free(old_file_search_regex);
         }
+#ifdef HAVE_PCRE2
+        ag_pcre_compile(&opts.file_search_regex, &opts.file_search_regex_extra, file_search_regex, pcre_opts, 0);
+#else
         compile_study(&opts.file_search_regex, &opts.file_search_regex_extra, file_search_regex, pcre_opts, 0);
+#endif
         free(file_search_regex);
     }
 
     if (has_filetype) {
-        num_exts = combine_file_extensions(ext_index, lang_num, &extensions);
-        lang_regex = make_lang_regex(extensions, num_exts);
+        // https://github.com/ggreer/the_silver_searcher/pull/1398
+        lang_regex = make_lang_regex(ext_index, lang_num);
+#ifdef HAVE_PCRE2
+        ag_pcre_compile(&opts.file_search_regex, &opts.file_search_regex_extra, lang_regex, 0, 0);
+#else
         compile_study(&opts.file_search_regex, &opts.file_search_regex_extra, lang_regex, 0, 0);
+#endif
     }
 
-    if (extensions) {
-        free(extensions);
-    }
     free(ext_index);
-    if (lang_regex) {
-        free(lang_regex);
-    }
+    free(lang_regex);
     free(longopts);
 
     argc -= optind;
@@ -768,14 +800,6 @@ void parse_options(int argc, char **argv, char **base_paths[], char **paths[]) {
         }
     }
 
-    if (opts.search_stream) {
-        opts.print_break = 0;
-        opts.print_path = PATH_PRINT_NOTHING;
-        if (opts.print_line_numbers != 2) {
-            opts.print_line_numbers = 0;
-        }
-    }
-
     if (accepts_query && argc > 0) {
         if (!needs_query && strlen(argv[0]) == 0) {
             // use default query
@@ -855,6 +879,14 @@ void parse_options(int argc, char **argv, char **base_paths[], char **paths[]) {
     (*paths)[i] = NULL;
     (*base_paths)[i] = NULL;
 
+    if (opts.search_stream) {
+        opts.print_break = 0;
+        opts.print_path = PATH_PRINT_NOTHING;
+        if (opts.print_line_numbers != 2) {
+            opts.print_line_numbers = 0;
+        }
+    }
+    
 #ifdef _WIN32
     windows_use_ansi(opts.color_win_ansi);
 #endif

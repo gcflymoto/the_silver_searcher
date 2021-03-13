@@ -5,6 +5,7 @@
 size_t alpha_skip_lookup[256];
 size_t *find_skip_lookup;
 uint8_t h_table[H_SIZE] __attribute__((aligned(64)));
+size_t bad_char_skip_lookup[UCHAR_MAX + 1];
 
 work_queue_t *work_queue = NULL;
 work_queue_t *work_queue_tail = NULL;
@@ -24,7 +25,8 @@ ssize_t search_buf(const char *buf, const size_t buf_len,
     if (opts.search_stream) {
         binary = 0;
     } else if (!opts.search_binary_files && opts.mmap) { /* if not using mmap, binary files have already been skipped */
-        binary = is_binary((const void *)buf, buf_len);
+        // https://github.com/ggreer/the_silver_searcher/pull/204
+        binary = is_binary(buf, buf_len);
         if (binary) {
             log_debug("File %s is binary. Skipping...", dir_full_path);
             return -1;
@@ -67,13 +69,13 @@ ssize_t search_buf(const char *buf, const size_t buf_len,
 #if defined(__i386__) || defined(__x86_64__)
             /* Decide whether to fall back on boyer-moore */
             if ((size_t)opts.query_len < 2 * sizeof(uint16_t) - 1 || opts.query_len >= UCHAR_MAX) {
-                match_ptr = ag_strnstr_fp(match_ptr, opts.query, buf_len - buf_offset, opts.query_len, lookup, find_skip_lookup, opts.casing == CASE_INSENSITIVE);
+                match_ptr = ag_strnstr_fp(match_ptr, opts.query, buf_len - buf_offset, opts.query_len, lookup, find_skip_lookup);
                 //match_ptr = boyer_moore_strnstr(match_ptr, opts.query, buf_len - buf_offset, opts.query_len, alpha_skip_lookup, find_skip_lookup, opts.casing == CASE_INSENSITIVE);
             } else {
                 match_ptr = hash_strnstr(match_ptr, opts.query, buf_len - buf_offset, opts.query_len, h_table, opts.casing == CASE_SENSITIVE);
             }
 #else
-            match_ptr = ag_strnstr_fp(match_ptr, opts.query, buf_len - buf_offset, opts.query_len, lookup, find_skip_lookup, opts.casing == CASE_INSENSITIVE);
+            match_ptr = ag_strnstr_fp(match_ptr, opts.query, buf_len - buf_offset, opts.query_len, lookup, find_skip_lookup);
 //match_ptr = boyer_moore_strnstr(match_ptr, opts.query, buf_len - buf_offset, opts.query_len, alpha_skip_lookup, find_skip_lookup, opts.casing == CASE_INSENSITIVE);
 #endif
 
@@ -119,7 +121,11 @@ ssize_t search_buf(const char *buf, const size_t buf_len,
         int offset_vector[3];
         if (opts.multiline) {
             while (buf_offset < buf_len &&
+#ifdef HAVE_PCRE2
+                   (ag_pcre_match(opts.re, opts.re_extra, buf, buf_len, buf_offset, 0, offset_vector, 3)) >= 0) {
+#else
                    (pcre_exec(opts.re, opts.re_extra, buf, buf_len, buf_offset, 0, offset_vector, 3)) >= 0) {
+#endif
                 log_debug("Regex match found. File %s, offset %i bytes.", dir_full_path, offset_vector[0]);
                 buf_offset = offset_vector[1];
                 if (offset_vector[0] == offset_vector[1]) {
@@ -147,7 +153,11 @@ ssize_t search_buf(const char *buf, const size_t buf_len,
                 }
                 size_t line_offset = 0;
                 while (line_offset < line_len) {
+#ifdef HAVE_PCRE2
+                    int rv = ag_pcre_match(opts.re, opts.re_extra, line, line_len, line_offset, 0, offset_vector, 3);
+#else
                     int rv = pcre_exec(opts.re, opts.re_extra, line, line_len, line_offset, 0, offset_vector, 3);
+#endif
                     if (rv < 0) {
                         break;
                     }
@@ -194,7 +204,8 @@ multiline_done:
 
     if (!opts.print_nonmatching_files && (matches_len > 0 || opts.print_all_paths)) {
         if (binary == -1 && !opts.print_filename_only) {
-            binary = is_binary((const void *)buf, buf_len);
+            // https://github.com/ggreer/the_silver_searcher/pull/204
+            binary = is_binary(buf, buf_len);
         }
         pthread_mutex_lock(&print_mtx);
         if (opts.print_filename_only) {
@@ -237,6 +248,10 @@ ssize_t search_stream(FILE *stream, const char *path) {
     size_t line_cap = 0;
     size_t i;
 
+    // https://github.com/ggreer/the_silver_searcher/issues/1349
+    if (stream == NULL) {
+        return 0;
+    }
     print_init_context();
 
     for (i = 1; (line_len = getline(&line, &line_cap, stream)) > 0; i++) {
@@ -261,6 +276,8 @@ ssize_t search_stream(FILE *stream, const char *path) {
     print_cleanup_context();
     return matches_count;
 }
+
+#define AG_MIN(a, b) ((b < a) ? b : a)
 
 void search_file(const char *file_full_path) {
     int fd = -1;
@@ -334,10 +351,13 @@ void search_file(const char *file_full_path) {
         goto cleanup;
     }
 
+#ifdef HAVE_PCRE2
+#else
     if (!opts.literal && f_len > INT_MAX) {
         log_err("Skipping %s: pcre_exec() can't handle files larger than %i bytes.", file_full_path, INT_MAX);
         goto cleanup;
     }
+#endif
 
 #ifdef _WIN32
     {
@@ -376,7 +396,14 @@ void search_file(const char *file_full_path) {
         ssize_t bytes_read = 0;
 
         if (!opts.search_binary_files) {
-            bytes_read += read(fd, buf, ag_min(f_len, 512));
+            // https://github.com/ggreer/the_silver_searcher/pull/1260
+            bytes_read += read(fd, buf, AG_MIN(f_len, 512));
+            if (bytes_read < 0) {
+                log_err("Failed to read %s: %s", file_full_path, strerror(errno));
+                goto cleanup;
+            }
+
+            // https://github.com/ggreer/the_silver_searcher/pull/204
             // Optimization: If skipping binary files, don't read the whole buffer before checking if binary or not.
             if (is_binary(buf, f_len)) {
                 log_debug("File %s is binary. Skipping...", file_full_path);
@@ -385,7 +412,11 @@ void search_file(const char *file_full_path) {
         }
 
         while (bytes_read < f_len) {
-            bytes_read += read(fd, buf + bytes_read, f_len);
+            // https://github.com/ggreer/the_silver_searcher/pull/1260
+            ssize_t r = read(fd, buf + bytes_read, f_len);
+            if (r < 0)
+                break;
+            bytes_read += r;
         }
         if (bytes_read != f_len) {
             die("File %s read(): expected to read %u bytes but read %u", file_full_path, f_len, bytes_read);
@@ -399,10 +430,17 @@ void search_file(const char *file_full_path) {
 #if HAVE_FOPENCOOKIE
             log_debug("%s is a compressed file. stream searching", file_full_path);
             fp = decompress_open(fd, "r", zip_type);
-            matches_count = search_stream(fp, file_full_path);
-            fclose(fp);
+            // https://github.com/ggreer/the_silver_searcher/issues/1349
+            if (fp == NULL) {
+                log_err("Skipping %s: Unable to decompress", file_full_path);
+                goto cleanup;
+            } else {
+                matches_count = search_stream(fp, file_full_path);
+                fclose(fp);
+            }
 #else
-            int _buf_len = (int)f_len;
+            // https://github.com/ggreer/the_silver_searcher/pull/1221
+            size_t _buf_len = f_len;
             char *_buf = decompress(zip_type, buf, f_len, file_full_path, &_buf_len);
             if (_buf == NULL || _buf_len == 0) {
                 log_err("Cannot decompress zipped file %s", file_full_path);
@@ -634,8 +672,13 @@ void search_dir(ignores *ig, const char *base_path, const char *path, const int 
 
         if (!is_directory(path, dir)) {
             if (opts.file_search_regex) {
+#ifdef HAVE_PCRE2
+                rc = ag_pcre_match(opts.file_search_regex, NULL, dir_full_path, strlen(dir_full_path),
+                                   0, 0, offset_vector, 3);
+#else
                 rc = pcre_exec(opts.file_search_regex, NULL, dir_full_path, strlen(dir_full_path),
                                0, 0, offset_vector, 3);
+#endif
                 if (rc < 0) { /* no match */
                     log_debug("Skipping %s due to file_search_regex.", dir_full_path);
                     goto cleanup;

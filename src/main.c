@@ -1,5 +1,7 @@
 #include <ctype.h>
+#ifdef HAVE_PCRE
 #include <pcre.h>
+#endif
 #include <stdarg.h>
 #include <stdio.h>
 #include <string.h>
@@ -10,6 +12,9 @@
 #endif
 
 #include "config.h"
+#ifdef HAVE_PCRE2
+#include "pcre_api.h"
+#endif
 
 #ifdef HAVE_SYS_CPUSET_H
 #include <sys/cpuset.h>
@@ -37,8 +42,13 @@ int main(int argc, char **argv) {
     char **base_paths = NULL;
     char **paths = NULL;
     int i;
+#ifdef HAVE_PCRE2
+    int pcre_opts = AG_PCRE_MULTILINE;
+    int use_jit = 0;
+#else
     int pcre_opts = PCRE_MULTILINE;
     int study_opts = 0;
+#endif
     worker_t *workers = NULL;
     int workers_len;
     int num_cores;
@@ -57,18 +67,28 @@ int main(int argc, char **argv) {
     out_fd = stdout;
 
     parse_options(argc, argv, &base_paths, &paths);
+#ifdef HAVE_PCRE2
+    log_debug("PCRE2 Version: %s", ag_pcre_version());
+#else
     log_debug("PCRE Version: %s", pcre_version());
+#endif
     if (opts.stats) {
         memset(&stats, 0, sizeof(stats));
         gettimeofday(&(stats.time_start), NULL);
     }
 
 #ifdef USE_PCRE_JIT
+#ifdef HAVE_PCRE2
+    if (ag_pcre_config(AG_PCRE_CONFIG_JIT, &use_jit)) {
+        use_jit = TRUE;
+    }
+#else
     int has_jit = 0;
     pcre_config(PCRE_CONFIG_JIT, &has_jit);
     if (has_jit) {
         study_opts |= PCRE_STUDY_JIT_COMPILE;
     }
+#endif
 #endif
 
 #ifdef _WIN32
@@ -138,7 +158,11 @@ int main(int argc, char **argv) {
         }
     } else {
         if (opts.casing == CASE_INSENSITIVE) {
+#ifdef HAVE_PCRE2
+            pcre_opts |= AG_PCRE_CASELESS;
+#else
             pcre_opts |= PCRE_CASELESS;
+#endif
         }
         if (opts.word_regexp) {
             char *word_regexp_query;
@@ -147,7 +171,11 @@ int main(int argc, char **argv) {
             opts.query = word_regexp_query;
             opts.query_len = strlen(opts.query);
         }
+#ifdef HAVE_PCRE2
+        ag_pcre_compile(&opts.re, &opts.re_extra, opts.query, pcre_opts, use_jit);
+#else
         compile_study(&opts.re, &opts.re_extra, opts.query, pcre_opts, study_opts);
+#endif
     }
 
     if (opts.search_stream) {
@@ -220,6 +248,7 @@ int main(int argc, char **argv) {
         double time_diff = ((long)stats.time_end.tv_sec * 1000000 + stats.time_end.tv_usec) -
                            ((long)stats.time_start.tv_sec * 1000000 + stats.time_start.tv_usec);
         time_diff /= 1000000;
+        // https://github.com/ggreer/the_silver_searcher/pull/1159/commits/b36c2ff5f21ebf1fa445d4122068a0051ae0193d
         printf("%zu matches\n%zu files contained matches\n%zu files searched\n%zu bytes searched\n%f seconds\n",
                stats.total_matches, stats.total_file_matches, stats.total_files, stats.total_bytes, time_diff);
         pthread_mutex_destroy(&stats_mtx);

@@ -1,8 +1,18 @@
 ACLOCAL_AMFLAGS = ${ACLOCAL_FLAGS}
+AM_DEFAULT_VERBOSITY = 1
 
 bin_PROGRAMS = ag
-ag_SOURCES = src/ignore.c src/ignore.h src/log.c src/log.h src/options.c src/options.h src/print.c src/print_w32.c src/print.h src/scandir.c src/scandir.h src/search.c src/search.h src/lang.c src/lang.h src/util.c src/util.h src/decompress.c src/decompress.h src/uthash.h src/main.c src/zfile.c
-ag_LDADD = ${PCRE_LIBS} ${LZMA_LIBS} ${ZLIB_LIBS} $(PTHREAD_LIBS)
+ag_SOURCES = src/ignore.c src/ignore.h src/log.c src/log.h src/options.c src/options.h src/print.c src/print.h src/scandir.c src/scandir.h src/search.c src/search.h src/lang.c src/lang.h src/util.c src/util.h src/decompress.c src/decompress.h src/uthash.h src/pcre_api.c	src/pcre_api.h src/main.c src/zfile.c
+if HAVE_PCRE2
+ag_LDADD = ${PCRE2_LIBS}
+else
+ag_LDADD = ${PCRE_LIBS}
+endif
+ag_LDADD += ${LZMA_LIBS} ${ZLIB_LIBS} $(PTHREAD_LIBS)
+
+if WINDOWS
+ag_SOURCES += src/print_w32 c
+endif
 
 dist_man_MANS = doc/ag.1
 
@@ -24,8 +34,17 @@ else
 	@echo "clang-format is not available. Skipped clang-format test."
 endif
 
+test_small: ag
+	cram -v tests/small/*.t
+
+test_small_compressed: ag
+	cram -v tests/small/small_file_*compressed.t
+
 test_big: ag
 	cram -v tests/big/*.t
+
+test_big_compressed: ag
+	cram -v tests/big/big_file_*compressed.t
 
 test_fail: ag
 	cram -v tests/fail/*.t

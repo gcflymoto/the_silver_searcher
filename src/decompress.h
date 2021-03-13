@@ -17,7 +17,8 @@ typedef enum {
 
 ag_compression_type is_zipped(const void *buf, const int buf_len);
 
-void *decompress(const ag_compression_type zip_type, void *buf, const int buf_len, const char *dir_full_path, unsigned int *new_buf_len);
+// https://github.com/ggreer/the_silver_searcher/pull/1221/
+void *decompress(const ag_compression_type zip_type, void *buf, const size_t buf_len, const char *dir_full_path, size_t *new_buf_len);
 
 #if HAVE_FOPENCOOKIE
 FILE *decompress_open(int fd, const char *mode, ag_compression_type ctype);

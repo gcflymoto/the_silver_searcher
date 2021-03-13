@@ -2,7 +2,9 @@
 #define UTIL_H
 
 #include <dirent.h>
+#ifdef HAVE_PCRE
 #include <pcre.h>
+#endif
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
@@ -11,6 +13,9 @@
 #include "config.h"
 #include "log.h"
 #include "options.h"
+#ifdef HAVE_PCRE2
+#include "pcre_api.h"
+#endif
 
 extern FILE *out_fd;
 
@@ -87,15 +92,18 @@ const char *boyer_moore_horspool_strnstr(const char *haystack, const char *needl
 const char *boyer_moore_horspool_strncasestr(const char *haystack, const char *needle, size_t hlen, size_t nlen,
                                              const size_t bad_char_skip_lookup[], const size_t *find_skip_lookup)
     _GL_ATTRIBUTE_PURE _GL_ATTRIBUTE_HOT _GL_ATTRIBUTE_NOTHROW;
-const char *hash_strnstr(const char *s, const char *find, const size_t s_len, const size_t f_len, uint8_t *h_table, const int case_sensitive);
+const char *hash_strnstr(const char *s, const char *find, const size_t s_len, const size_t f_len, uint8_t *h_table, const int case_sensitive)
+    _GL_ATTRIBUTE_PURE _GL_ATTRIBUTE_HOT _GL_ATTRIBUTE_NOTHROW;
 strncmp_fp get_strstr(enum case_behavior casing, enum algorithm_type algorithm);
 
 size_t invert_matches(const char *buf, const size_t buf_len, match_t matches[], size_t matches_len);
 void realloc_matches(match_t **matches, size_t *matches_size, size_t matches_len);
+#ifdef HAVE_PCRE
 void compile_study(pcre **re, pcre_extra **re_extra, char *q, const int pcre_opts, const int study_opts);
+#endif
 
-
-int is_binary(const void *buf, const size_t buf_len);
+// https://github.com/ggreer/the_silver_searcher/pull/204
+int is_binary(const char *buf, const size_t buf_len);
 int is_regex(const char *query);
 int is_fnmatch(const char *filename);
 int binary_search(const char *needle, char **haystack, int start, int end);

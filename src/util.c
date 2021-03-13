@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
+#include <limits.h>
 
 #include "config.h"
 #include "util.h"
@@ -105,7 +106,7 @@ void generate_bad_char_skip(const char *needle, size_t nlen, size_t bad_char_ski
     /* Then populate it with the analysis of the needle */
     for (scan = 0; scan < last; ++scan) {
         if (case_sensitive) {
-            bad_char_skip_lookup[needle[scan]] = last - scan;
+            bad_char_skip_lookup[(unsigned char)needle[scan]] = last - scan;
         } else {
             bad_char_skip_lookup[tolower(needle[scan])] = last - scan;
             bad_char_skip_lookup[toupper(needle[scan])] = last - scan;
@@ -201,8 +202,8 @@ void generate_hash(const char *find, const size_t f_len, uint8_t *h_table, const
 }
 
 /* Boyer-Moore strstr */
-static inline _GL_ATTRIBUTE_PURE _GL_ATTRIBUTE_HOT _GL_ATTRIBUTE_NOTHROW const char *boyer_moore_strnstr(const char *s, const char *find, const size_t s_len, const size_t f_len,
-                                                                                                         const size_t alpha_skip_lookup[], const size_t *find_skip_lookup) {
+_GL_ATTRIBUTE_PURE _GL_ATTRIBUTE_HOT _GL_ATTRIBUTE_NOTHROW const char *boyer_moore_strnstr(const char *s, const char *find, const size_t s_len, const size_t f_len,
+                                                                                           const size_t alpha_skip_lookup[], const size_t *find_skip_lookup) {
     ssize_t i;
     size_t pos = f_len - 1;
 
@@ -220,8 +221,8 @@ static inline _GL_ATTRIBUTE_PURE _GL_ATTRIBUTE_HOT _GL_ATTRIBUTE_NOTHROW const c
 
 
 /* Copy-pasted from above. Yes I know this is bad. One day I might even fix it. */
-static inline _GL_ATTRIBUTE_PURE _GL_ATTRIBUTE_HOT _GL_ATTRIBUTE_NOTHROW const char *boyer_moore_strncasestr(const char *s, const char *find, const size_t s_len, const size_t f_len,
-                                                                                                             const size_t alpha_skip_lookup[], const size_t *find_skip_lookup) {
+_GL_ATTRIBUTE_PURE _GL_ATTRIBUTE_HOT _GL_ATTRIBUTE_NOTHROW const char *boyer_moore_strncasestr(const char *s, const char *find, const size_t s_len, const size_t f_len,
+                                                                                               const size_t alpha_skip_lookup[], const size_t *find_skip_lookup) {
     ssize_t i;
     size_t pos = f_len - 1;
 
@@ -246,8 +247,8 @@ static inline _GL_ATTRIBUTE_PURE _GL_ATTRIBUTE_HOT _GL_ATTRIBUTE_NOTHROW const c
  * 0x00 will be cut off, so you could call this example with
  * boyermoore_horspool_strcasestr(haystack, hlen, "abc", sizeof("abc")-1)
  */
-static inline _GL_ATTRIBUTE_PURE _GL_ATTRIBUTE_HOT _GL_ATTRIBUTE_NOTHROW const char *boyer_moore_horspool_strnstr(const char *haystack, const char *needle, size_t hlen, size_t nlen,
-                                                                                                                  const size_t bad_char_skip_lookup[], const size_t *find_skip_lookup) {
+_GL_ATTRIBUTE_PURE _GL_ATTRIBUTE_HOT _GL_ATTRIBUTE_NOTHROW const char *boyer_moore_horspool_strnstr(const char *haystack, const char *needle, size_t hlen, size_t nlen,
+                                                                                                    const size_t bad_char_skip_lookup[], const size_t *find_skip_lookup) {
     printf("In boyer_moore_horspool_strnstr\n");
 
     /* Sanity checks on the parameters */
@@ -278,8 +279,8 @@ static inline _GL_ATTRIBUTE_PURE _GL_ATTRIBUTE_HOT _GL_ATTRIBUTE_NOTHROW const c
            the last character is slower in the normal case (E.g. finding
            "abcd" in "...azcd..." gives 4 by using 'd' but only
            4-2==2 using 'z'. */
-        hlen -= bad_char_skip_lookup[haystack[last]];
-        haystack += bad_char_skip_lookup[haystack[last]];
+        hlen -= bad_char_skip_lookup[(unsigned char)haystack[last]];
+        haystack += bad_char_skip_lookup[(unsigned char)haystack[last]];
     }
 
     return NULL;
@@ -294,8 +295,8 @@ static inline _GL_ATTRIBUTE_PURE _GL_ATTRIBUTE_HOT _GL_ATTRIBUTE_NOTHROW const c
  * 0x00 will be cut off, so you could call this example with
  * boyermoore_horspool_strcasestr(haystack, hlen, "abc", sizeof("abc")-1)
  */
-static inline _GL_ATTRIBUTE_PURE _GL_ATTRIBUTE_HOT _GL_ATTRIBUTE_NOTHROW const char *boyer_moore_horspool_strncasestr(const char *haystack, const char *needle, size_t hlen, size_t nlen,
-                                                                                                                      const size_t bad_char_skip_lookup[], const size_t *find_skip_lookup) {
+_GL_ATTRIBUTE_PURE _GL_ATTRIBUTE_HOT _GL_ATTRIBUTE_NOTHROW const char *boyer_moore_horspool_strncasestr(const char *haystack, const char *needle, size_t hlen, size_t nlen,
+                                                                                                        const size_t bad_char_skip_lookup[], const size_t *find_skip_lookup) {
     printf("In boyer_moore_horspool_strncasestr\n");
     /* Sanity checks on the parameters */
     if (nlen <= 0 || !haystack || !needle)
@@ -325,8 +326,8 @@ static inline _GL_ATTRIBUTE_PURE _GL_ATTRIBUTE_HOT _GL_ATTRIBUTE_NOTHROW const c
            the last character is slower in the normal case (E.g. finding
            "abcd" in "...azcd..." gives 4 by using 'd' but only
            4-2==2 using 'z'. */
-        hlen -= bad_char_skip_lookup[haystack[last]];
-        haystack += bad_char_skip_lookup[haystack[last]];
+        hlen -= bad_char_skip_lookup[(unsigned char)haystack[last]];
+        haystack += bad_char_skip_lookup[(unsigned char)haystack[last]];
     }
 
     return NULL;
@@ -347,7 +348,7 @@ strncmp_fp get_strstr(enum case_behavior casing, enum algorithm_type algorithm) 
 
 // Clang's -fsanitize=alignment (included in -fsanitize=undefined) will flag
 // the intentional unaligned access here, so suppress it for this function
-NO_SANITIZE_ALIGNMENT const char *hash_strnstr(const char *s, const char *find, const size_t s_len, const size_t f_len, uint8_t *h_table, const int case_sensitive) {
+_GL_ATTRIBUTE_PURE _GL_ATTRIBUTE_HOT _GL_ATTRIBUTE_NOTHROW NO_SANITIZE_ALIGNMENT const char *hash_strnstr(const char *s, const char *find, const size_t s_len, const size_t f_len, uint8_t *h_table, const int case_sensitive) {
     if (s_len < f_len)
         return NULL;
 
@@ -459,6 +460,7 @@ void realloc_matches(match_t **matches, size_t *matches_size, size_t matches_len
     *matches = ag_realloc(*matches, *matches_size * sizeof(match_t));
 }
 
+#ifdef HAVE_PCRE
 void compile_study(pcre **re, pcre_extra **re_extra, char *q, const int pcre_opts, const int study_opts) {
     const char *pcre_err = NULL;
     int pcre_err_offset = 0;
@@ -474,20 +476,23 @@ void compile_study(pcre **re, pcre_extra **re_extra, char *q, const int pcre_opt
         log_debug("pcre_study returned nothing useful. Error: %s", pcre_err);
     }
 }
+#endif
 
+// https://github.com/ggreer/the_silver_searcher/pull/204
 /* This function is very hot. It's called on every file. */
-int is_binary(const void *buf, const size_t buf_len) {
-    size_t suspicious_bytes = 0;
-    size_t total_bytes = buf_len > 512 ? 512 : buf_len;
-    const unsigned char *buf_c = buf;
-    size_t i;
+int is_binary(const char *buf, const size_t buf_len) {
+    const unsigned char *s = (const unsigned char *)buf;
+    int suspicious_bytes = 0;
+    int total_bytes = buf_len > 512 ? 512 : buf_len;
+    int valid_utf8 = 1;
+    int i;
 
     if (buf_len == 0) {
         /* Is an empty file binary? Is it text? */
         return 0;
     }
 
-    if (buf_len >= 3 && buf_c[0] == 0xEF && buf_c[1] == 0xBB && buf_c[2] == 0xBF) {
+    if (buf_len >= 3 && s[0] == 0xEF && s[1] == 0xBB && s[2] == 0xBF) {
         /* UTF-8 BOM. This isn't binary. */
         return 0;
     }
@@ -498,33 +503,67 @@ int is_binary(const void *buf, const size_t buf_len) {
     }
 
     for (i = 0; i < total_bytes; i++) {
-        if (buf_c[i] == '\0') {
-            /* NULL char. It's binary */
+        const unsigned char c = s[i];
+
+        /* We order the character tests such that we optimize for the case
+         * of checking ASCII text. Typically a 'binary' file will contain
+         * a NUL char early on and will return quickly; we want to minimize
+         * the time spent examining plain text. */
+
+        if (c <= 126) {
+            if (c >= 32) {
+                continue; /* ASCII text in 32..126 range. */
+            } else if (c >= 8 && c <= 13) {
+                continue; /* ASCII BS, TAB, LF, VT, FF or CR. */
+            } else {
+                if (c == 0) {
+                    return 1; /* A NUL char - it's binary. */
+                }
+                /* Assert: c is in (1..8) or (14..31) */
+            }
+        } else if (c == 127) {
+            /* ASCII DEL. Treat as suspicious. */
+        } else if (valid_utf8) {
+/* Assert: (c > 127)
+             * Maybe it's the first of a multibyte UTF-8 character.
+             * NB. RFC 3629 states "The octet values C0, C1, F5 to FF never appear". */
+
+/* A valid continuation byte matches 10xxxxxx. */
+#define not_utf8_continuation_byte(c) (((c)&0xC0) != 0x80)
+
+            if (c >= 0xc2) {
+                if (c < 0xe0) /* start byte 110xxxxx */
+                    goto check_2_byte_utf8_char;
+                if (c < 0xf0) /* start byte 1110xxxx */
+                    goto check_3_byte_utf8_char;
+                if (c < 0xf5) { /* start byte 11110xxx */
+                    if (not_utf8_continuation_byte(s[++i]))
+                        goto not_utf8;
+                check_3_byte_utf8_char:
+                    if (not_utf8_continuation_byte(s[++i]))
+                        goto not_utf8;
+                check_2_byte_utf8_char:
+                    if (not_utf8_continuation_byte(s[++i]))
+                        goto not_utf8;
+
+                    continue; /* A valid UTF-8 multibyte character. */
+                }
+            }
+        not_utf8:
+            valid_utf8 = 0;
+        }
+        /* If we get here then we're suspicious it's binary! */
+        ++suspicious_bytes;
+
+        /* Disk IO is so slow that it's worthwhile to do this calculation after every suspicious byte. */
+        /* This is true even on a 1.6Ghz Atom with an Intel 320 SSD. */
+        /* Read at least 32 bytes before making a decision */
+        if (i >= 32 && 10 * suspicious_bytes > total_bytes) {
             return 1;
-        } else if ((buf_c[i] < 7 || buf_c[i] > 14) && (buf_c[i] < 32 || buf_c[i] > 127)) {
-            /* UTF-8 detection */
-            if (buf_c[i] > 193 && buf_c[i] < 224 && i + 1 < total_bytes) {
-                i++;
-                if (buf_c[i] > 127 && buf_c[i] < 192) {
-                    continue;
-                }
-            } else if (buf_c[i] > 223 && buf_c[i] < 240 && i + 2 < total_bytes) {
-                i++;
-                if (buf_c[i] > 127 && buf_c[i] < 192 && buf_c[i + 1] > 127 && buf_c[i + 1] < 192) {
-                    i++;
-                    continue;
-                }
-            }
-            suspicious_bytes++;
-            /* Disk IO is so slow that it's worthwhile to do this calculation after every suspicious byte. */
-            /* This is true even on a 1.6Ghz Atom with an Intel 320 SSD. */
-            /* Read at least 32 bytes before making a decision */
-            if (i >= 32 && (suspicious_bytes * 100) / total_bytes > 10) {
-                return 1;
-            }
         }
     }
-    if ((suspicious_bytes * 100) / total_bytes > 10) {
+
+    if (10 * suspicious_bytes > total_bytes) {
         return 1;
     }
 

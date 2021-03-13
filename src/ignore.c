@@ -9,6 +9,9 @@
 #include "ignore.h"
 #include "log.h"
 #include "options.h"
+#ifdef HAVE_PCRE2
+#include "pcre_api.h"
+#endif
 #include "scandir.h"
 #include "util.h"
 
@@ -52,7 +55,7 @@ const char *ignore_pattern_files[] = {
 
 int is_empty(ignores *ig) {
     return (ig->extensions_len + ig->names_len + ig->slash_names_len + ig->regexes_len + ig->slash_regexes_len == 0);
-};
+}
 
 ignores *init_ignore(ignores *parent, const char *dirname, const size_t dirname_len) {
     ignores *ig = ag_malloc(sizeof(ignores));
@@ -290,8 +293,12 @@ static int ackmate_dir_match(const char *dir_name) {
     if (opts.ackmate_dir_filter == NULL) {
         return 0;
     }
-    /* we just care about the match, not where the matches are */
+/* we just care about the match, not where the matches are */
+#ifdef HAVE_PCRE2
+    return ag_pcre_match(opts.ackmate_dir_filter, NULL, dir_name, strlen(dir_name), 0, 0, NULL, 0);
+#else
     return pcre_exec(opts.ackmate_dir_filter, NULL, dir_name, strlen(dir_name), 0, 0, NULL, 0);
+#endif
 }
 
 /* This is the hottest code in Ag. 10-15% of all execution time is spent here */
