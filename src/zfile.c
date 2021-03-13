@@ -36,7 +36,7 @@ typedef _off64_t off64_t;
 //https://github.com/ggreer/the_silver_searcher/pull/1324
 static inline size_t
 min(size_t a, size_t b) {
-	return a < b ? a : b;
+    return a < b ? a : b;
 }
 
 static cookie_read_function_t zfile_read;
@@ -240,7 +240,7 @@ zfile_read(void *cookie_, char *buf, size_t size) {
     //https://github.com/ggreer/the_silver_searcher/pull/1353
     if ((cookie->ctype != AG_XZ) && (cookie->ctype != AG_GZIP))
         return -1;
-    
+
     assert(size <= SSIZE_MAX);
 
     if (size == 0)
@@ -300,7 +300,7 @@ zfile_read(void *cookie_, char *buf, size_t size) {
         if (size == 0)
             break;
 
-        /*
+/*
 		 * If we have not satisfied read, the output buffer must be
 		 * empty.
 		 */
@@ -321,7 +321,7 @@ zfile_read(void *cookie_, char *buf, size_t size) {
             break;
         }
 #endif
-        
+
         /* Read more input if empty */
         if (CAVAIL_IN(cookie) == 0) {
             nb = fread(cookie->inbuf, 1, sizeof cookie->inbuf,
@@ -339,7 +339,7 @@ zfile_read(void *cookie_, char *buf, size_t size) {
                 cookie->stream.lzma.avail_in = nb;
                 cookie->stream.lzma.next_in = cookie->inbuf;
             }
-#endif            
+#endif
 #ifdef HAVE_ZLIB_H
             if (cookie->ctype == AG_GZIP) {
                 cookie->stream.gz.avail_in = nb;
@@ -348,7 +348,7 @@ zfile_read(void *cookie_, char *buf, size_t size) {
 #endif
         }
 
-        /* Reset stream state to beginning of output buffer */
+/* Reset stream state to beginning of output buffer */
 #ifdef HAVE_LZMA_H
         if (cookie->ctype == AG_XZ) {
             cookie->stream.lzma.next_out = cookie->outbuf;
@@ -364,7 +364,7 @@ zfile_read(void *cookie_, char *buf, size_t size) {
 #endif
         cookie->outbuf_start = 0;
 
-#ifdef HAVE_ZLIB_H        
+#ifdef HAVE_ZLIB_H
         if (cookie->ctype == AG_GZIP) {
             ret = inflate(&cookie->stream.gz, Z_NO_FLUSH);
             if (ret != Z_OK && ret != Z_STREAM_END) {

@@ -886,7 +886,7 @@ void parse_options(int argc, char **argv, char **base_paths[], char **paths[]) {
             opts.print_line_numbers = 0;
         }
     }
-    
+
 #ifdef _WIN32
     windows_use_ansi(opts.color_win_ansi);
 #endif
